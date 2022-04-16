@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mongodb-depl
+  labels:
+    app: mongodb
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mongodb
+      tier: backend
+  template:
+    metadata:
+      labels:
+        app: mongodb
+        tier: backend
+      annotations:
+        prometheus.io/path: /metrics
+        prometheus.io/port: "9216"
+        prometheus.io/scheme: http
+        prometheus.io/scrape: "true"
+    spec:
+      volumes:
+        - name: mongovolume
+          persistentVolumeClaim:
+            claimName: pvc1
+      containers:
+        - name: mongodb-container
+          image: mongo
+          ports:
+            - containerPort: 27017
+          volumeMounts:
+            - name: mongovolume
+              mountPath: /data/db
+          env:
+            - name: MONGO_INITDB_ROOT_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: mongodb-secret
+                  key: username
+            - name: MONGO_INITDB_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mongodb-secret
+                  key: password
+        - name: mongo-exporter
+          image: bitnami/mongodb-exporter:0.11.2
+          args: ["--mongodb.uri=mongodb://username:password@127.0.0.1:27017/admin?ssl=false"]
+          ports:
+            - containerPort: 9216
+              
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongodb-service
+spec:
+  selector:
+    app: mongodb
+    tier: backend
+  ports:
+    - port: 27017
+      targetPort: 27017
+      protocol: TCP
